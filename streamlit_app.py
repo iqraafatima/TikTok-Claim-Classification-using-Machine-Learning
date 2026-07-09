@@ -2,8 +2,10 @@ import streamlit as st
 import joblib
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
+import hashlib
 
-st.set_page_config(page_title="TikTok Claim Classifier", page_icon="🎥", layout="wide")
+st.set_page_config(page_title="Case File · Claim Review", page_icon="🗂️", layout="wide")
 
 MODEL_PATH = Path("models/champion_model.pkl")
 VECTORIZER_PATH = Path("models/vectorizer.pkl")
@@ -19,111 +21,192 @@ def load_artifacts():
 model, vectorizer = load_artifacts()
 
 # ==============================================================
-# DESIGN SYSTEM — trust & safety / moderation-dashboard aesthetic
+# DESIGN SYSTEM — "Case File" aesthetic
+# A trust & safety review desk: manila folders, stamped verdicts,
+# typewritten case metadata, redaction bars. Built for the subject
+# (content moderation), not a generic dashboard skin.
 # ==============================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root{
-    --bg:#12151A;
-    --surface:#1B1F26;
-    --surface-alt:#232833;
-    --ink:#E7EAEE;
-    --ink-soft:#8B93A1;
-    --claim:#E2574C;
-    --opinion:#4C9FE2;
-    --warn:#E2A33C;
-    --line:#2A2F3A;
+    --paper:#EDE4CC;
+    --paper-alt:#E4D8B8;
+    --folder:#C9A667;
+    --folder-dark:#B08F52;
+    --ink:#24211A;
+    --ink-soft:#6B6350;
+    --claim:#9C3B2C;
+    --opinion:#2E5578;
+    --warn:#A87422;
+    --redact:#1C1A16;
+    --line:#B9AC85;
+    --card-shadow: 4px 6px 0px rgba(28,26,22,0.08);
 }
-html, body, [class*="css"]{ font-family:'Inter', sans-serif; color:var(--ink); }
-.stApp{ background:var(--bg); }
-h1, h2, h3, .display{ font-family:'Space Grotesk', sans-serif; color:var(--ink); }
+
+html, body, [class*="css"]{ font-family:'IBM Plex Sans', sans-serif; color:var(--ink); }
+.stApp{
+    background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, rgba(0,0,0,0.015) 1px, transparent 1px, transparent 3px),
+        var(--paper);
+}
+h1, h2, h3{ font-family:'Zilla Slab', serif; color:var(--ink); font-weight:700; }
+
+.typewriter{ font-family:'Special Elite', monospace; }
+.mono{ font-family:'IBM Plex Mono', monospace; }
 
 .eyebrow{
-    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.14em;
-    text-transform:uppercase; color:var(--ink-soft); font-weight:600;
+    font-family:'Special Elite', monospace; font-size:11px; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--ink-soft);
 }
-hr{ border:none; height:1px; background:var(--line); margin:26px 0; }
 
+/* ---- Folder tab masthead ---- */
+.folder-wrap{ margin-bottom:0; position:relative; }
+.folder-tab{
+    display:inline-block; background:var(--folder); color:var(--redact);
+    padding:8px 26px 10px 26px; border-radius:10px 10px 0 0;
+    font-family:'Special Elite', monospace; font-size:12px; letter-spacing:0.08em;
+    text-transform:uppercase; border:1px solid var(--folder-dark); border-bottom:none;
+    box-shadow: 0 -1px 0 rgba(0,0,0,0.05) inset;
+}
 .hero{
-    background:linear-gradient(135deg,#1B1F26 0%, #20262F 100%);
-    border:1px solid var(--line);
-    padding:32px 36px; border-radius:18px; margin-bottom:24px;
+    background: var(--paper-alt);
+    border:1px solid var(--line); border-top:3px solid var(--folder-dark);
+    padding:30px 36px 26px 36px; border-radius:0 12px 12px 12px;
+    box-shadow: var(--card-shadow); margin-bottom:26px;
 }
-.hero h1{ font-size:1.9rem; margin:6px 0 8px 0; }
-.hero p{ color:var(--ink-soft); max-width:640px; margin:0; }
+.hero h1{ font-size:2rem; margin:6px 0 10px 0; }
+.hero p{ color:var(--ink-soft); max-width:680px; margin:0; font-size:0.98rem; line-height:1.5; }
+.case-meta{
+    display:flex; gap:28px; margin-top:18px; padding-top:14px;
+    border-top:1px dashed var(--line); flex-wrap:wrap;
+}
+.case-meta div{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); }
+.case-meta b{ color:var(--ink); display:block; font-size:13px; margin-bottom:2px; }
 
+/* ---- Index-card sections ---- */
 .section-card{
-    background:var(--surface); border:1px solid var(--line);
-    padding:22px 26px; border-radius:16px; margin-bottom:20px;
+    background:#F5EFDC; border:1px solid var(--line);
+    padding:22px 26px 24px 26px; border-radius:4px; margin-bottom:22px;
+    box-shadow: var(--card-shadow);
+    position:relative;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
 }
-.section-card h4{ margin-top:0; margin-bottom:4px; color:var(--ink); }
-.section-sub{ color:var(--ink-soft); font-size:0.85rem; margin-bottom:16px; }
+.section-card h4{
+    margin-top:0; margin-bottom:2px; color:var(--ink); font-family:'Zilla Slab', serif;
+    font-size:1.15rem; display:flex; align-items:center; gap:8px;
+}
+.section-sub{ color:var(--ink-soft); font-size:0.83rem; margin-bottom:16px; font-style:italic; }
+.tag-no{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft);
+    background:var(--paper); border:1px solid var(--line); padding:1px 7px; border-radius:3px;
+}
 
-/* Streamlit inputs, dark-mode friendly */
-div[data-testid="stNumberInput"] input, div[data-testid="stTextArea"] textarea{
-    background:var(--surface-alt) !important; color:var(--ink) !important;
-    border:1.5px solid var(--line) !important; border-radius:10px !important;
+hr.cut-line{
+    border:none; border-top:1px dashed var(--line); margin:28px 0;
 }
+
+/* ---- Inputs, dark-on-paper tuned ---- */
+div[data-testid="stNumberInput"] input, div[data-testid="stTextArea"] textarea{
+    background:#FBF7EA !important; color:var(--ink) !important;
+    border:1.5px solid var(--line) !important; border-radius:6px !important;
+    font-family:'IBM Plex Mono', monospace !important;
+}
+div[data-testid="stTextArea"] textarea{ font-family:'IBM Plex Sans', sans-serif !important; }
 div[data-testid="stSelectbox"] > div > div{
-    background:var(--surface-alt) !important; border:1.5px solid var(--line) !important;
-    border-radius:10px !important;
+    background:#FBF7EA !important; border:1.5px solid var(--line) !important; border-radius:6px !important;
 }
 div[data-testid="stCheckbox"] label p{ color:var(--ink) !important; }
+label p { color: var(--ink-soft) !important; font-size:0.82rem !important; text-transform:uppercase; letter-spacing:0.03em; }
 
 div.stButton > button{
-    background:var(--claim) !important; color:#FFFFFF !important; border:none !important;
-    border-radius:12px !important; padding:0.7em 1.4em !important; font-weight:600 !important;
-    font-family:'Inter', sans-serif !important; transition:.2s ease;
+    background:var(--redact) !important; color:#F5EFDC !important; border:none !important;
+    border-radius:4px !important; padding:0.75em 1.4em !important; font-weight:600 !important;
+    font-family:'Special Elite', monospace !important; letter-spacing:0.08em !important;
+    text-transform:uppercase; font-size:0.85rem !important;
+    transition:.15s ease; border:1px solid var(--redact) !important;
 }
-div.stButton > button:hover{ filter:brightness(1.1); transform:translateY(-2px); }
+div.stButton > button:hover{ background:#332E24 !important; transform:translateY(-1px); }
 div.stButton > button:focus-visible{ outline:3px solid var(--warn) !important; outline-offset:2px; }
 
-.badge{
-    display:inline-flex; align-items:center; gap:8px;
-    padding:10px 18px; border-radius:10px; font-weight:600; font-size:1.05rem;
-    margin-bottom:16px;
+/* ---- Verdict stamp: the signature element ---- */
+.stamp-zone{
+    display:flex; justify-content:center; align-items:center;
+    padding:34px 10px 30px 10px; position:relative;
 }
-.badge-claim{ background:rgba(226,87,76,0.14); color:var(--claim); border:1px solid rgba(226,87,76,0.35); }
-.badge-opinion{ background:rgba(76,159,226,0.14); color:var(--opinion); border:1px solid rgba(76,159,226,0.35); }
+.stamp{
+    display:inline-block; padding:16px 34px; border:5px double;
+    font-family:'Special Elite', monospace; font-size:2.1rem; letter-spacing:0.12em;
+    text-transform:uppercase; transform:rotate(-5deg); border-radius:6px;
+    opacity:0.92; text-shadow: 0 0 1px currentColor;
+    background: repeating-radial-gradient(circle at 30% 30%, rgba(0,0,0,0.02), transparent 2px);
+}
+.stamp-claim{ color:var(--claim); border-color:var(--claim); }
+.stamp-opinion{ color:var(--opinion); border-color:var(--opinion); }
+.stamp-sub{
+    text-align:center; font-family:'IBM Plex Mono', monospace; font-size:11.5px;
+    color:var(--ink-soft); letter-spacing:0.06em; margin-top:-6px;
+}
 
+/* ---- Confidence gauge styled as a polygraph strip ---- */
+.gauge-label{
+    display:flex; justify-content:space-between; font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--ink-soft); margin-bottom:5px; text-transform:uppercase;
+}
 .meter-track{
-    background:var(--surface-alt); border-radius:10px; height:14px; overflow:hidden;
+    background:#E4D8B8; border-radius:3px; height:16px; overflow:hidden;
     border:1px solid var(--line); position:relative;
 }
-.meter-fill{ height:100%; border-radius:10px 0 0 10px; }
+.meter-fill{ height:100%; }
 .meter-threshold{
-    position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--warn);
+    position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--redact);
+}
+.meter-threshold::after{
+    content:'DECISION LINE'; position:absolute; top:-16px; left:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--ink-soft); white-space:nowrap;
 }
 
 .stat-readout{ font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--ink); }
-.meta-label{
-    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.08em;
-    text-transform:uppercase; color:var(--ink-soft); font-weight:600; margin-bottom:2px;
-}
-.diag-ok{ color:#4FBF7A; }
+
+/* ---- Evidence log / diagnostics ---- */
+.diag-ok{ color:#3E7D4C; }
 .diag-warn{ color:var(--warn); }
-.diag-bad{ color:var(--claim); }
+.diag-bad{ color:var(--claim); font-weight:600; }
+
+.redact-line{
+    display:inline-block; background:var(--redact); color:var(--redact);
+    padding:0 8px; border-radius:2px; user-select:none;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================
 # Layout
 # ==============================================================
-st.markdown("""
+case_id = f"AMU-TS-{datetime.now().strftime('%Y%m%d')}-{abs(hash(datetime.now())) % 900 + 100}"
+
+st.markdown('<div class="folder-wrap"><span class="folder-tab">Exhibit &nbsp;·&nbsp; Content Review Desk</span></div>', unsafe_allow_html=True)
+st.markdown(f"""
 <div class="hero">
-    <div class="eyebrow">Content Moderation · Screening Tool</div>
-    <h1>🎥 TikTok Claim vs. Opinion Classifier</h1>
-    <p>Predicts whether a video makes a <b>claim</b> (a factual assertion,
-    possibly against platform terms) or states an <b>opinion</b>, based on
-    engagement metrics, author signals, and transcript text.</p>
+    <div class="eyebrow">Trust &amp; Safety — Screening Assist</div>
+    <h1>🗂️ Claim vs. Opinion Review</h1>
+    <p>Estimates whether a video makes a <b>verifiable claim</b> (a factual
+    assertion, possibly against platform policy) or states a <b>personal
+    opinion</b> — using engagement signals, author trust indicators, and the
+    transcript itself.</p>
+    <div class="case-meta">
+        <div><b>Case No.</b>{case_id}</div>
+        <div><b>Reviewer</b>Automated Model</div>
+        <div><b>Opened</b>{datetime.now().strftime('%d %b %Y, %H:%M')}</div>
+        <div><b>Status</b>Awaiting Input</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="section-card">
-<h4>📊 Engagement Metrics</h4>
+<h4>📊 Engagement Log <span class="tag-no">FORM 01</span></h4>
 <div class="section-sub">Raw counts pulled from the video's public stats.</div>
 """, unsafe_allow_html=True)
 c1, c2, c3 = st.columns(3)
@@ -140,8 +223,8 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("""
 <div class="section-card">
-<h4>👤 Author Signals</h4>
-<div class="section-sub">Trust indicators about the account posting the video.</div>
+<h4>👤 Author Trust Indicators <span class="tag-no">FORM 02</span></h4>
+<div class="section-sub">Signals about the account posting the video.</div>
 """, unsafe_allow_html=True)
 a1, a2 = st.columns(2)
 with a1:
@@ -152,7 +235,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("""
 <div class="section-card">
-<h4>📝 Transcript</h4>
+<h4>📝 Transcript <span class="tag-no">EXHIBIT A</span></h4>
 <div class="section-sub">What the video's narration or on-screen text actually says.</div>
 """, unsafe_allow_html=True)
 transcript = st.text_area(
@@ -163,7 +246,7 @@ transcript = st.text_area(
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
-run = st.button("Run Prediction", type="primary", use_container_width=True)
+run = st.button("File for Review", type="primary", use_container_width=True)
 
 if run:
     text_len = len(transcript)
@@ -198,26 +281,42 @@ if run:
     pred = model.predict(final_df)[0]
     proba = model.predict_proba(final_df)[0][1]
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown('<div class="eyebrow">Result</div>', unsafe_allow_html=True)
+    st.markdown('<hr class="cut-line">', unsafe_allow_html=True)
+    st.markdown('<div class="eyebrow" style="text-align:center;">Verdict</div>', unsafe_allow_html=True)
 
     if pred == 1:
-        st.markdown('<div class="badge badge-claim">🚩 Claim</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="stamp-zone">
+            <div style="text-align:center;">
+                <div class="stamp stamp-claim">🚩 Claim</div>
+                <div class="stamp-sub">FLAGGED FOR REVIEW — CASE %s</div>
+            </div>
+        </div>
+        """ % case_id, unsafe_allow_html=True)
         fill_color = "var(--claim)"
     else:
-        st.markdown('<div class="badge badge-opinion">💬 Opinion</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="stamp-zone">
+            <div style="text-align:center;">
+                <div class="stamp stamp-opinion">💬 Opinion</div>
+                <div class="stamp-sub">CLEARED — CASE %s</div>
+            </div>
+        </div>
+        """ % case_id, unsafe_allow_html=True)
         fill_color = "var(--opinion)"
 
     pct = proba * 100
     st.markdown(f"""
+    <div class="gauge-label"><span>Opinion</span><span>Claim probability</span></div>
     <div class="meter-track">
         <div class="meter-fill" style="width:{pct:.1f}%; background:{fill_color};"></div>
         <div class="meter-threshold" style="left:50%;"></div>
     </div>
-    <p style="margin-top:8px;" class="stat-readout">Claim probability: {proba:.1%}</p>
+    <p style="margin-top:14px; text-align:center;" class="stat-readout">{proba:.1%} claim probability</p>
     """, unsafe_allow_html=True)
 
-    with st.expander("🔍 Feature diagnostics (debug: is the transcript actually being used?)"):
+    with st.expander("🔍 Chain of Custody — Feature Audit Trail"):
+        st.caption("Every prediction should be traceable back to the inputs that produced it. This log shows exactly what reached the model.")
         st.markdown(f"""
         - **Model expects** `{len(model_cols)}` total features
         - **Your input produced** `{len(pre_reindex_cols)}` features before reindexing
@@ -240,5 +339,11 @@ if run:
                 unsafe_allow_html=True,
             )
             st.code(sorted(missing_from_input)[:30])
+        st.markdown(
+            '<span class="diag-warn">⚠ If probability barely moves across very different transcripts, '
+            'suspect class imbalance or leakage in training rather than this UI — check the training '
+            'label distribution and confirm no leaked column encodes the label.</span>',
+            unsafe_allow_html=True,
+        )
 
-    st.caption("Model: Random Forest classifier · Trained on TikTok content moderation dataset")
+    st.caption(f"Model: Random Forest classifier · Case {case_id} · Not a substitute for human moderation review")
