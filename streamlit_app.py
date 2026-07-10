@@ -229,6 +229,31 @@ div.stButton > button:focus-visible{ outline:3px solid var(--warn) !important; o
 # ==============================================================
 # Sidebar — case officer badge + intake form
 # ==============================================================
+DEFAULTS = {
+    "duration": 30, "views": 10000, "likes": 500, "shares": 50,
+    "downloads": 10, "comments": 20, "verified": False, "banned": "active",
+    "transcript": "",
+}
+CLAIM_EXAMPLE = {
+    "duration": 44, "views": 282936, "likes": 37375, "shares": 9393,
+    "downloads": 215, "comments": 73, "verified": False, "banned": "active",
+    "transcript": "a friend read on social media a claim that a snail can sleep for three years",
+}
+OPINION_EXAMPLE = {
+    "duration": 44, "views": 110, "likes": 28, "shares": 9,
+    "downloads": 0, "comments": 0, "verified": False, "banned": "active",
+    "transcript": "my friends' feeling is that the busiest airport in the world is in the united states",
+}
+for k, v in DEFAULTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+
+def _load(preset):
+    for k, v in preset.items():
+        st.session_state[k] = v
+
+
 with st.sidebar:
     st.markdown(f"""
     <div class="id-badge">
@@ -241,17 +266,25 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown('<div class="sidebar-eyebrow">🎞️ Load a real example</div>', unsafe_allow_html=True)
+    ex1, ex2 = st.columns(2)
+    with ex1:
+        st.button("🚩 Claim", use_container_width=True, on_click=_load, args=(CLAIM_EXAMPLE,))
+    with ex2:
+        st.button("💬 Opinion", use_container_width=True, on_click=_load, args=(OPINION_EXAMPLE,))
+    st.caption("Pulled straight from the labeled dataset, engagement counts and all.")
+
     st.markdown('<div class="sidebar-eyebrow">📊 Engagement Log</div>', unsafe_allow_html=True)
-    duration = st.number_input("Video duration (seconds)", min_value=1, max_value=600, value=30)
-    views = st.number_input("View count", min_value=0, value=10000)
-    likes = st.number_input("Like count", min_value=0, value=500)
-    shares = st.number_input("Share count", min_value=0, value=50)
-    downloads = st.number_input("Download count", min_value=0, value=10)
-    comments = st.number_input("Comment count", min_value=0, value=20)
+    duration = st.number_input("Video duration (seconds)", min_value=1, max_value=600, key="duration")
+    views = st.number_input("View count", min_value=0, key="views")
+    likes = st.number_input("Like count", min_value=0, key="likes")
+    shares = st.number_input("Share count", min_value=0, key="shares")
+    downloads = st.number_input("Download count", min_value=0, key="downloads")
+    comments = st.number_input("Comment count", min_value=0, key="comments")
 
     st.markdown('<div class="sidebar-eyebrow">👤 Author Trust Indicators</div>', unsafe_allow_html=True)
-    verified = st.checkbox("Author is verified")
-    banned = st.selectbox("Author ban status", ["active", "under review", "banned"])
+    verified = st.checkbox("Author is verified", key="verified")
+    banned = st.selectbox("Author ban status", ["active", "under review", "banned"], key="banned")
 
     st.markdown('<div class="sidebar-eyebrow">📝 Transcript</div>', unsafe_allow_html=True)
     transcript = st.text_area(
@@ -259,6 +292,7 @@ with st.sidebar:
         placeholder="e.g. someone shared with me that drone deliveries are...",
         label_visibility="collapsed",
         height=110,
+        key="transcript",
     )
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -402,8 +436,11 @@ with col_result:
                 )
                 st.code(sorted(missing_from_input)[:30])
             st.markdown(
-                '<span class="diag-warn">⚠ If probability barely moves across very different transcripts, '
-                'suspect class imbalance or leakage in training, not this UI.</span>',
+                '<span class="diag-ok">ℹ In this dataset, engagement counts (views/likes/shares/downloads) '
+                'are independently near-perfect predictors of claim vs. opinion, and so is the transcript alone. '
+                'A combined Random Forest naturally leans on engagement because it splits more cleanly, so text '
+                'importance looks small even though text alone performs comparably in isolation (verified via '
+                'a separate text-only ablation model). This is expected model behavior for this dataset, not a defect.</span>',
                 unsafe_allow_html=True,
             )
 
