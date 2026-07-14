@@ -1,12 +1,14 @@
 """
-TikTok Claim vs. Opinion Classifier — Streamlit App
-----------------------------------------------------
-Companion app for the eda_and_modeling.ipynb notebook. Recreates the
-EDA + modeling pipeline interactively, and — importantly — surfaces a
-serious data leakage issue found in the original notebook: the model
-was trained on post-publication engagement metrics (views, likes,
-shares, downloads, comments) which are a near-perfect proxy for the
-label, not a genuine signal available at prediction time.
+TikTok Claim vs. Opinion Classifier
+------------------------------------
+Same pipeline as eda_and_modeling.ipynb, wrapped in a Streamlit app.
+
+While going through the notebook I noticed the model was trained on
+post-publication engagement numbers (views, likes, shares, downloads,
+comments). Those aren't really "features" available before a video gets
+classified - they're basically the label wearing a disguise. This app
+reproduces that bug on purpose (toggle it in the sidebar) so you can see
+how much it inflates the scores, and defaults to the leakage-safe version.
 
 Run with:  streamlit run app.py
 """
@@ -42,39 +44,84 @@ except ImportError:
     XGB_AVAILABLE = False
 
 # --------------------------------------------------------------------------
-# Page config & light styling
+# Page config
 # --------------------------------------------------------------------------
 st.set_page_config(
     page_title="TikTok Claim Classifier",
-    page_icon="🎬",
+    page_icon=":coffee:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# --------------------------------------------------------------------------
+# Theme - coffee palette, monospace everywhere
+# --------------------------------------------------------------------------
+BG = "#241810"          # espresso
+PANEL = "#2f2117"       # mocha
+BORDER = "#4a3527"      # roasted brown
+INK = "#f0e6d6"         # latte foam (primary text)
+INK_MUTED = "#c8b39c"   # steamed milk (muted text)
+CARAMEL = "#c1893f"     # accent / interactive
+SIENNA = "#a8552f"      # warm alert (leak banner)
+SAGE = "#7f8f5e"        # calm/safe banner
+CREAM_BAR = "#c1893f"
+SAGE_BAR = "#7f8f5e"
+
+plt.rcParams.update({
+    "font.family": "monospace",
+    "font.monospace": ["Courier New", "Courier", "monospace"],
+    "figure.facecolor": PANEL,
+    "axes.facecolor": PANEL,
+    "axes.edgecolor": BORDER,
+    "axes.labelcolor": INK,
+    "text.color": INK,
+    "xtick.color": INK_MUTED,
+    "ytick.color": INK_MUTED,
+    "axes.titlecolor": INK,
+    "grid.color": BORDER,
+    "legend.facecolor": PANEL,
+    "legend.edgecolor": BORDER,
+    "legend.labelcolor": INK,
+})
+
 st.markdown(
-    """
+    f"""
     <style>
-    .stApp { background-color: #0e1117; }
-    .leak-banner {
-        background-color: #3a1f1f;
-        border-left: 5px solid #e05c5c;
+    html, body, [class*="css"], .stMarkdown, .stText, .stDataFrame,
+    .stButton>button, .stSelectbox, .stSlider, .stTextInput, .stTextArea,
+    .stNumberInput, .stTabs, .stMetric, table, th, td, .stCaption, p, span, label {{
+        font-family: 'Courier New', Courier, monospace !important;
+    }}
+    .stApp {{ background-color: {BG}; color: {INK}; }}
+    h1, h2, h3, h4 {{
+        letter-spacing: 0.02em;
+        border-bottom: 1px dashed {BORDER};
+        padding-bottom: 0.3rem;
+    }}
+    .leak-banner {{
+        background-color: {PANEL};
+        border-left: 4px solid {SIENNA};
         padding: 0.9rem 1.1rem;
-        border-radius: 6px;
+        border-radius: 4px;
         margin-bottom: 1rem;
-    }
-    .safe-banner {
-        background-color: #1f3a24;
-        border-left: 5px solid #5ce07f;
+        color: {INK};
+    }}
+    .safe-banner {{
+        background-color: {PANEL};
+        border-left: 4px solid {SAGE};
         padding: 0.9rem 1.1rem;
-        border-radius: 6px;
+        border-radius: 4px;
         margin-bottom: 1rem;
-    }
-    .metric-card {
-        background-color: #161b22;
-        border: 1px solid #262c36;
-        border-radius: 10px;
+        color: {INK};
+    }}
+    .metric-card {{
+        background-color: {PANEL};
+        border: 1px solid {BORDER};
+        border-radius: 6px;
         padding: 1rem;
-    }
+    }}
+    [data-testid="stMetricValue"] {{ color: {CARAMEL}; }}
+    ::-webkit-scrollbar-thumb {{ background: {BORDER}; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -209,10 +256,13 @@ def evaluate(model, X, y):
 # --------------------------------------------------------------------------
 # Sidebar
 # --------------------------------------------------------------------------
-st.sidebar.title("🎬 TikTok Claim Classifier")
-st.sidebar.caption("Claim vs. opinion detection — with a data-leakage check built in.")
+st.sidebar.title("TikTok Claim Classifier")
+st.sidebar.caption("Claim vs. opinion detection, with a leakage check built in.")
 
 uploaded = st.sidebar.file_uploader("Upload tiktok_dataset.csv (optional)", type="csv")
+st.sidebar.caption(
+    "Only used for this session - nothing you upload here gets saved or sent anywhere."
+)
 data_source = uploaded if uploaded is not None else DEFAULT_DATA_PATH
 
 df = load_data(data_source)
@@ -228,21 +278,21 @@ model_choice = st.sidebar.selectbox("Model", model_options, index=0)
 use_engagement = st.sidebar.checkbox(
     "Include engagement metrics (views/likes/shares/comments/downloads)",
     value=False,
-    help="These columns are only known AFTER a video is posted and moderated. "
+    help="These are only known AFTER a video is posted and moderated. "
     "Turning this on recreates the leakage bug from the original notebook.",
 )
 
 if use_engagement:
     st.sidebar.markdown(
-        '<div class="leak-banner">⚠️ Leaky mode: using post-publication '
-        "engagement counts as predictors. Scores will look almost perfect "
-        "but the model isn't learning anything useful about the content.</div>",
+        '<div class="leak-banner">Leaky mode is on: the model can see post-publication '
+        "engagement counts. Scores will look almost perfect, but it isn't learning "
+        "anything real about the video content.</div>",
         unsafe_allow_html=True,
     )
 else:
     st.sidebar.markdown(
-        '<div class="safe-banner">✅ Leakage-safe mode: model only sees '
-        "information available before/at upload time.</div>",
+        '<div class="safe-banner">Leakage-safe mode: the model only sees information '
+        "that would exist before/at upload time.</div>",
         unsafe_allow_html=True,
     )
 
@@ -253,17 +303,16 @@ with st.spinner("Training model..."):
 # Tabs
 # --------------------------------------------------------------------------
 tab_overview, tab_eda, tab_leakage, tab_model, tab_predict = st.tabs(
-    ["📋 Overview", "📊 EDA", "🚨 Data Leakage", "🤖 Model Performance", "🔮 Try a Prediction"]
+    ["Overview", "EDA", "Data Leakage", "Model Performance", "Try a Prediction"]
 )
 
 # ---- Overview ----
 with tab_overview:
     st.header("TikTok Claim vs. Opinion Classifier")
     st.write(
-        "This app reproduces the modeling notebook's pipeline (text n-grams + "
-        "metadata → Random Forest / Logistic Regression / XGBoost) and adds an "
-        "interactive check for a **serious data leakage issue** found in the "
-        "original analysis. Use the tabs above to explore."
+        "This reproduces the modeling notebook's pipeline (text n-grams + metadata "
+        "into Random Forest / Logistic Regression / XGBoost) and adds a check for a "
+        "data leakage bug I found in the original analysis. Use the tabs above to poke around."
     )
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Rows (after cleaning)", f"{len(df):,}")
@@ -271,8 +320,13 @@ with tab_overview:
     c3.metric("Opinion videos", f"{(df['claim_status']=='opinion').sum():,}")
     c4.metric("Class balance", f"{df['claim_status'].value_counts(normalize=True).iloc[0]*100:.1f}% / "
               f"{df['claim_status'].value_counts(normalize=True).iloc[1]*100:.1f}%")
-    st.subheader("Sample data")
-    st.dataframe(df.head(10), use_container_width=True)
+
+    with st.expander("Show sample rows from the dataset"):
+        st.caption(
+            "Collapsed by default since this shows raw video transcription text - "
+            "expand only if you want to eyeball the actual rows."
+        )
+        st.dataframe(df.head(10), use_container_width=True)
 
 # ---- EDA ----
 with tab_eda:
@@ -284,67 +338,69 @@ with tab_eda:
         fig, ax = plt.subplots(figsize=(6, 4))
         sns.histplot(
             data=df, x="text_length", hue="claim_status", multiple="dodge",
-            palette="pastel", ax=ax
+            palette=[CREAM_BAR, SAGE_BAR], ax=ax
         )
         ax.set_xlabel("Text length (characters)")
         st.pyplot(fig)
         st.caption(
             f"Claims average {df.loc[df.claim_status=='claim','text_length'].mean():.1f} "
             f"chars vs. {df.loc[df.claim_status=='opinion','text_length'].mean():.1f} "
-            "for opinions — a modest, genuine text signal."
+            "for opinions - a modest, genuine text signal."
         )
 
     with col2:
         st.subheader("Class balance")
         fig, ax = plt.subplots(figsize=(6, 4))
-        df["claim_status"].value_counts().plot.bar(ax=ax, color=["#5c9ee0", "#e0a85c"])
+        df["claim_status"].value_counts().plot.bar(ax=ax, color=[CREAM_BAR, SAGE_BAR])
         ax.set_ylabel("Count")
         st.pyplot(fig)
 
-    st.subheader("Correlation heatmap — numeric features")
+    st.subheader("Correlation heatmap - numeric features")
     numeric_cols = ["video_duration_sec"] + ENGAGEMENT_COLS
     fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="copper", fmt=".2f", ax=ax,
+                annot_kws={"color": INK})
     st.pyplot(fig)
 
     st.subheader("Engagement metrics by claim status")
     metric_pick = st.selectbox("Metric", ENGAGEMENT_COLS, index=0)
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(data=df, x="claim_status", y=metric_pick, ax=ax)
+    sns.boxplot(data=df, x="claim_status", y=metric_pick, ax=ax,
+                palette=[CREAM_BAR, SAGE_BAR])
     ax.set_yscale("symlog")
     st.pyplot(fig)
 
 # ---- Leakage ----
 with tab_leakage:
-    st.header("🚨 The serious issue in the original notebook")
+    st.header("The leakage problem in the original notebook")
     st.markdown(
         """
-The notebook builds its feature set (`X`) directly from the raw dataframe, which
-still includes `video_view_count`, `video_like_count`, `video_share_count`,
-`video_download_count`, and `video_comment_count`. These are **engagement
-metrics measured after a video is posted and after TikTok's moderation system
-has already reacted to it** — they are downstream consequences of a video
-being a "claim," not independent evidence a real-world classifier would have
-*before* making a decision. That makes them a form of **target leakage**.
+The notebook builds its feature set straight from the raw dataframe, which still
+includes `video_view_count`, `video_like_count`, `video_share_count`,
+`video_download_count`, and `video_comment_count`. Those are engagement numbers
+measured *after* a video is posted and after moderation has already reacted to
+it - they're downstream of a video being a "claim," not independent evidence a
+real classifier would have before making a call. That's target leakage.
         """
     )
 
     trivial_thresh = st.slider(
-        "Try a single-feature rule: predict 'claim' if video_view_count is above...",
+        "Single-feature rule: predict 'claim' if video_view_count is above...",
         min_value=0, max_value=int(df["video_view_count"].max()), value=10000, step=500,
     )
     guess = np.where(df["video_view_count"] > trivial_thresh, "claim", "opinion")
     trivial_acc = (guess == df["claim_status"]).mean()
-    st.metric("Accuracy of this ONE-line rule (no ML, no text features)", f"{trivial_acc*100:.2f}%")
+    st.metric("Accuracy of this one-line rule (no ML, no text features)", f"{trivial_acc*100:.2f}%")
     st.caption(
         "If a single threshold on one column nearly matches your trained model's "
-        "accuracy, the model isn't really learning from the video content — it's "
-        "rediscovering this shortcut."
+        "accuracy, the model isn't learning much from the video content - it's "
+        "just rediscovering this shortcut."
     )
 
-    st.subheader("Why it happens: the two classes barely overlap on view count")
+    st.subheader("Why: the two classes barely overlap on view count")
     fig, ax = plt.subplots(figsize=(9, 4))
-    sns.kdeplot(data=df, x="video_view_count", hue="claim_status", fill=True, common_norm=False, ax=ax)
+    sns.kdeplot(data=df, x="video_view_count", hue="claim_status", fill=True,
+                common_norm=False, ax=ax, palette=[CREAM_BAR, SAGE_BAR])
     ax.set_xlabel("video_view_count")
     st.pyplot(fig)
     st.write(
@@ -358,17 +414,16 @@ being a "claim," not independent evidence a real-world classifier would have
     )
 
     st.info(
-        "**Fix applied in this app:** the sidebar toggle 'Include engagement "
-        "metrics' is OFF by default. With it off, the model is trained only on "
-        "information available at/near upload time (transcription text, "
-        "duration, verified status, author ban status) — a fair test of whether "
-        "the video's *content* predicts claim vs. opinion. Flip the toggle on "
-        "to reproduce the original (leaky) result and compare."
+        "Fix applied here: the sidebar toggle for engagement metrics is off by default. "
+        "With it off, the model only trains on what's available at/near upload time "
+        "(transcription text, duration, verified status, author ban status) - a fair "
+        "test of whether the content itself predicts claim vs. opinion. Flip the toggle "
+        "on to reproduce the original (leaky) result and compare."
     )
 
 # ---- Model performance ----
 with tab_model:
-    st.header(f"Model performance — {model_choice} ({'leaky' if use_engagement else 'leakage-safe'} features)")
+    st.header(f"Model performance - {model_choice} ({'leaky' if use_engagement else 'leakage-safe'} features)")
 
     val_metrics, val_pred, val_proba = evaluate(bundle["model"], bundle["X_val"], bundle["y_val"])
     cols = st.columns(len(val_metrics))
@@ -380,8 +435,9 @@ with tab_model:
         st.subheader("Confusion matrix (validation set)")
         cm = confusion_matrix(bundle["y_val"], val_pred)
         fig, ax = plt.subplots(figsize=(4.5, 4))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                    xticklabels=["opinion", "claim"], yticklabels=["opinion", "claim"], ax=ax)
+        sns.heatmap(cm, annot=True, fmt="d", cmap="YlOrBr",
+                    xticklabels=["opinion", "claim"], yticklabels=["opinion", "claim"], ax=ax,
+                    annot_kws={"color": BG})
         ax.set_xlabel("Predicted")
         ax.set_ylabel("Actual")
         st.pyplot(fig)
@@ -391,8 +447,8 @@ with tab_model:
             st.subheader("ROC curve (validation set)")
             fpr, tpr, _ = roc_curve(bundle["y_val"], val_proba)
             fig, ax = plt.subplots(figsize=(4.5, 4))
-            ax.plot(fpr, tpr, label=f"AUC = {val_metrics['ROC AUC']:.3f}")
-            ax.plot([0, 1], [0, 1], "--", color="gray")
+            ax.plot(fpr, tpr, label=f"AUC = {val_metrics['ROC AUC']:.3f}", color=CARAMEL, linewidth=2)
+            ax.plot([0, 1], [0, 1], "--", color=INK_MUTED)
             ax.set_xlabel("False Positive Rate")
             ax.set_ylabel("True Positive Rate")
             ax.legend()
@@ -406,25 +462,25 @@ with tab_model:
         imp = pd.Series(bundle["model"].feature_importances_, index=bundle["feature_names"])
         imp = imp.sort_values(ascending=False).head(15)
         fig, ax = plt.subplots(figsize=(8, 5))
-        imp.plot.barh(ax=ax)
+        imp.plot.barh(ax=ax, color=CARAMEL)
         ax.invert_yaxis()
         ax.set_xlabel("Importance")
         st.pyplot(fig)
         if use_engagement and imp.index[0] in ENGAGEMENT_COLS:
             st.warning(
-                f"Top feature is **{imp.index[0]}**, an engagement metric — "
+                f"Top feature is **{imp.index[0]}**, an engagement metric - "
                 "confirming the model is leaning on leaked information rather "
                 "than the video's text/content."
             )
 
     st.caption(
-        "Held-out **test set** accuracy: "
+        "Held-out test set accuracy: "
         f"{accuracy_score(bundle['y_test'], bundle['model'].predict(bundle['X_test']))*100:.2f}%"
     )
 
 # ---- Prediction playground ----
 with tab_predict:
-    st.header("🔮 Try a live prediction")
+    st.header("Try a live prediction")
     st.write("Fill in a hypothetical video below. Fields shown depend on the current feature mode.")
 
     with st.form("predict_form"):
