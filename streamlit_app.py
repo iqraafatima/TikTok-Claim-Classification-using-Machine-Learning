@@ -77,9 +77,10 @@ plt.rcParams.update({
 st.markdown(
     f"""
     <style>
-    html, body, [class*="css"], .stMarkdown, .stText, .stDataFrame,
+    html, body, .stMarkdown, .stText, .stDataFrame,
     .stButton>button, .stSelectbox, .stSlider, .stTextInput, .stTextArea,
-    .stNumberInput, .stTabs, .stMetric, table, th, td, .stCaption, p, span, label {{
+    .stNumberInput, .stTabs, .stMetric, table, th, td, .stCaption,
+    p, span, label {{
         font-family: 'Courier New', Courier, monospace !important;
     }}
     .stApp {{ background-color: {BG}; color: {INK}; }}
@@ -87,6 +88,21 @@ st.markdown(
         letter-spacing: 0.02em;
         border-bottom: 1px dashed {BORDER};
         padding-bottom: 0.3rem;
+        line-height: 1.4;
+    }}
+    /* keep the file uploader from overflowing its box */
+    [data-testid="stFileUploaderDropzone"] * {{
+        white-space: normal !important;
+        word-break: break-word;
+    }}
+    [data-testid="stFileUploaderDropzone"] {{
+        min-height: 90px;
+        height: auto !important;
+    }}
+    /* give expander headers breathing room so titles don't collide with the arrow */
+    [data-testid="stExpander"] summary {{
+        padding: 0.5rem 0.75rem;
+        line-height: 1.5;
     }}
     .leak-banner {{
         background-color: {PANEL};
@@ -113,6 +129,7 @@ st.markdown(
     [data-testid="stMetricValue"] {{ color: {CARAMEL}; }}
     ::-webkit-scrollbar-thumb {{ background: {BORDER}; }}
     </style>
+
     """,
     unsafe_allow_html=True,
 )
