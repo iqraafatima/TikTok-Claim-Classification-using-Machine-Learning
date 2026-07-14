@@ -1,16 +1,6 @@
 """
 TikTok Claim vs. Opinion Classifier
 ------------------------------------
-Same pipeline as eda_and_modeling.ipynb, wrapped in a Streamlit app.
-
-While going through the notebook I noticed the model was trained on
-post-publication engagement numbers (views, likes, shares, downloads,
-comments). Those aren't really "features" available before a video gets
-classified - they're basically the label wearing a disguise. This app
-reproduces that bug on purpose (toggle it in the sidebar) so you can see
-how much it inflates the scores, and defaults to the leakage-safe version.
-
-Run with:  streamlit run app.py
 """
 
 import os
