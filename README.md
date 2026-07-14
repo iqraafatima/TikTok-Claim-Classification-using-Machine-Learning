@@ -104,6 +104,14 @@ Each row is one TikTok video with:
 5. Evaluation: accuracy, precision, recall, F1, ROC AUC, confusion matrix,
    feature importance
 
+ ## bullet points
+Built and deployed an interactive Streamlit ML app classifying TikTok videos as factual claims vs. opinions from transcription text and metadata, comparing Logistic Regression, Random Forest, and XGBoost (82.6% accuracy on leakage-safe features)
+Identified and fixed a critical data leakage bug where post-publication engagement metrics (views, likes, shares) allowed a single-feature rule to achieve 99.5% accuracy, masking the model's true content-based predictive power
+Engineered an NLP feature pipeline using n-gram count vectorization (CountVectorizer, 2–3 grams) combined with categorical and numerical metadata for binary text classification
+Applied GridSearchCV hyperparameter tuning across 100+ parameter combinations, optimizing for recall to prioritize catching true claim videos for moderation review
+Communicated model risk clearly through visual diagnostics (ROC/PR curves, confusion matrices, feature importance, SHAP) to distinguish genuine signal from spurious correlation
+
+
 ## Possible next steps
 
 - Add cross-validated leakage checks as a standard pipeline step (e.g.,
