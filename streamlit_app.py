@@ -83,6 +83,17 @@ st.markdown(
     p, span, label {{
         font-family: 'Courier New', Courier, monospace !important;
     }}
+
+    /* Exclude Streamlit's icon font glyphs from the monospace override -
+       otherwise icons like the expander arrow and sidebar collapse render
+       as literal text (e.g. "arrow_right", "keyboard_double_arrow_right") */
+    [data-testid="stIconMaterial"],
+    .material-icons,
+    .material-symbols-rounded,
+    [class*="MaterialIcon"] {{
+        font-family: 'Material Symbols Rounded' !important;
+    }}
+
     .stApp {{ background-color: {BG}; color: {INK}; }}
     h1, h2, h3, h4 {{
         letter-spacing: 0.02em;
@@ -90,20 +101,35 @@ st.markdown(
         padding-bottom: 0.3rem;
         line-height: 1.4;
     }}
-    /* keep the file uploader from overflowing its box */
-    [data-testid="stFileUploaderDropzone"] * {{
-        white-space: normal !important;
-        word-break: break-word;
-    }}
+
+    /* keep the file uploader box from clipping/overlapping text,
+       but do NOT break-word the button itself */
     [data-testid="stFileUploaderDropzone"] {{
         min-height: 90px;
         height: auto !important;
+        flex-wrap: wrap;
     }}
-    /* give expander headers breathing room so titles don't collide with the arrow */
+    [data-testid="stFileUploaderDropzone"] > div,
+    [data-testid="stFileUploaderDropzone"] small {{
+        white-space: normal !important;
+        word-break: break-word;
+    }}
+    [data-testid="stFileUploaderDropzone"] button {{
+        white-space: nowrap !important;
+        width: auto !important;
+        min-width: fit-content;
+        flex-shrink: 0;
+    }}
+
+    /* give expander headers breathing room so titles don't collide with the arrow icon */
     [data-testid="stExpander"] summary {{
         padding: 0.5rem 0.75rem;
         line-height: 1.5;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
     }}
+
     .leak-banner {{
         background-color: {PANEL};
         border-left: 4px solid {SIENNA};
@@ -129,7 +155,6 @@ st.markdown(
     [data-testid="stMetricValue"] {{ color: {CARAMEL}; }}
     ::-webkit-scrollbar-thumb {{ background: {BORDER}; }}
     </style>
-
     """,
     unsafe_allow_html=True,
 )
